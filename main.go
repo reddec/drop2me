@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
 )
@@ -69,7 +70,12 @@ func main() {
 	http.HandleFunc("/", handler)
 
 	fmt.Printf("Listening on %s\n\n", bindAddr)
-	log.Fatal(http.ListenAndServe(bindAddr, nil))
+	server := &http.Server{
+		Addr:              bindAddr,
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	log.Fatal(server.ListenAndServe())
 }
 
 func listURLs(port string) []string {
