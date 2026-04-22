@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
 )
@@ -68,7 +70,12 @@ func main() {
 	http.HandleFunc("/", handler)
 
 	fmt.Printf("Listening on %s\n\n", bindAddr)
-	log.Fatal(http.ListenAndServe(bindAddr, nil))
+	server := &http.Server{
+		Addr:              bindAddr,
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	log.Fatal(server.ListenAndServe())
 }
 
 func listURLs(port string) []string {
@@ -119,6 +126,23 @@ func printQR(s string) {
 	fmt.Println(qr.ToString(false))
 }
 
+// uniquePath returns dst unchanged if it doesn't exist, otherwise appends _1,
+// _2, … until a free name is found.
+func uniquePath(dir, name string) string {
+	dst := filepath.Join(dir, name)
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		return dst
+	}
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	for i := 1; ; i++ {
+		dst = filepath.Join(dir, fmt.Sprintf("%s_%d%s", base, i, ext))
+		if _, err := os.Stat(dst); os.IsNotExist(err) {
+			return dst
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // HTTP
 // ---------------------------------------------------------------------------
@@ -158,7 +182,8 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		name = filepath.Base(name)
-		dst := filepath.Join(uploadDir, name)
+		dst := uniquePath(uploadDir, name)
+		name = filepath.Base(dst)
 
 		f, err := os.Create(dst)
 		if err != nil {
