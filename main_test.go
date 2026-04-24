@@ -1,60 +1,69 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestUniquePath(t *testing.T) {
+func TestCreateUniqueFile(t *testing.T) {
 	dir := t.TempDir()
 
-	// No collision — returns the original path.
-	got := uniquePath(dir, "file.txt")
-	want := filepath.Join(dir, "file.txt")
-	if got != want {
-		t.Fatalf("no collision: got %q, want %q", got, want)
-	}
-
-	// Create the file so the next call must pick a different name.
-	touch(t, got)
-
-	got = uniquePath(dir, "file.txt")
-	want = filepath.Join(dir, "file_1.txt")
-	if got != want {
-		t.Fatalf("first collision: got %q, want %q", got, want)
-	}
-
-	// Create _1 too — expect _2.
-	touch(t, got)
-
-	got = uniquePath(dir, "file.txt")
-	want = filepath.Join(dir, "file_2.txt")
-	if got != want {
-		t.Fatalf("second collision: got %q, want %q", got, want)
-	}
-
-	// File without extension.
-	touch(t, filepath.Join(dir, "readme"))
-	got = uniquePath(dir, "readme")
-	want = filepath.Join(dir, "readme_1")
-	if got != want {
-		t.Fatalf("no-ext collision: got %q, want %q", got, want)
-	}
-
-	// Completely free name in a busy directory — no suffix added.
-	got = uniquePath(dir, "other.png")
-	want = filepath.Join(dir, "other.png")
-	if got != want {
-		t.Fatalf("free name: got %q, want %q", got, want)
-	}
-}
-
-func touch(t *testing.T, path string) {
-	t.Helper()
-	f, err := os.Create(path)
+	f, dst, err := createUniqueFile(dir, "file.txt")
 	if err != nil {
-		t.Fatalf("touch %q: %v", path, err)
+		t.Fatalf("no collision: %v", err)
 	}
 	f.Close()
+	if dst != filepath.Join(dir, "file.txt") {
+		t.Fatalf("no collision: got %q, want %q", dst, filepath.Join(dir, "file.txt"))
+	}
+
+	f, dst, err = createUniqueFile(dir, "file.txt")
+	if err != nil {
+		t.Fatalf("first collision: %v", err)
+	}
+	f.Close()
+	if dst != filepath.Join(dir, "file_1.txt") {
+		t.Fatalf("first collision: got %q, want %q", dst, filepath.Join(dir, "file_1.txt"))
+	}
+
+	f, dst, err = createUniqueFile(dir, "file.txt")
+	if err != nil {
+		t.Fatalf("second collision: %v", err)
+	}
+	f.Close()
+	if dst != filepath.Join(dir, "file_2.txt") {
+		t.Fatalf("second collision: got %q, want %q", dst, filepath.Join(dir, "file_2.txt"))
+	}
+
+	f, dst, err = createUniqueFile(dir, "readme")
+	if err != nil {
+		t.Fatalf("no-ext: %v", err)
+	}
+	f.Close()
+	if dst != filepath.Join(dir, "readme") {
+		t.Fatalf("no-ext: got %q, want %q", dst, filepath.Join(dir, "readme"))
+	}
+
+	f, dst, err = createUniqueFile(dir, "readme")
+	if err != nil {
+		t.Fatalf("no-ext collision: %v", err)
+	}
+	f.Close()
+	if dst != filepath.Join(dir, "readme_1") {
+		t.Fatalf("no-ext collision: got %q, want %q", dst, filepath.Join(dir, "readme_1"))
+	}
+
+	f, dst, err = createUniqueFile(dir, "other.png")
+	if err != nil {
+		t.Fatalf("free name: %v", err)
+	}
+	f.Close()
+	if dst != filepath.Join(dir, "other.png") {
+		t.Fatalf("free name: got %q, want %q", dst, filepath.Join(dir, "other.png"))
+	}
+
+	_, _, err = createUniqueFile("/nonexistent/path", "foo.txt")
+	if err == nil {
+		t.Fatal("expected error for nonexistent directory")
+	}
 }

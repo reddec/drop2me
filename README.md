@@ -34,10 +34,11 @@ Or grab a binary from releases. Or build it yourself. It's one file, you'll surv
 drop2me [flags]
 ```
 
-| Flag   | Env            | Default  | Description      |
-|--------|----------------|----------|------------------|
-| `-bind`| `DROP2ME_BIND` | `:8080`  | Listen address   |
-| `-dir` | `DROP2ME_DIR`  | `.`      | Upload directory |
+| Flag        | Env                | Default | Description                         |
+|-------------|--------------------|---------|-------------------------------------|
+| `-bind`     | `DROP2ME_BIND`     | `:8080` | Listen address                      |
+| `-dir`      | `DROP2ME_DIR`      | `.`     | Upload directory                    |
+| `-max-size` | `DROP2ME_MAX_SIZE` | `0`     | Max upload size in bytes (0 = unlimited) |
 
 ```bash
 # defaults
@@ -62,6 +63,9 @@ DROP2ME_BIND=:3000 DROP2ME_DIR=~/Downloads drop2me
 
 ```bash
 docker run --rm -p 8080:8080 -v $(pwd)/uploads:/data ghcr.io/reddec/drop2me
+
+# run as non-root user
+docker run --rm -p 8080:8080 -v $(pwd)/uploads:/data -u 1000:1000 ghcr.io/reddec/drop2me
 ```
 
 ## Why

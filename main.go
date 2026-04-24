@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,15 +25,24 @@ var (
 	tplSuccess *template.Template
 	bindAddr   string
 	uploadDir  string
+	maxSize    int64
 )
 
 func init() {
 	flag.StringVar(&bindAddr, "bind", envOr("DROP2ME_BIND", ":8080"), "binding address")
 	flag.StringVar(&uploadDir, "dir", envOr("DROP2ME_DIR", "."), "upload directory")
+	flag.Int64Var(&maxSize, "max-size", envInt64("DROP2ME_MAX_SIZE", 0), "max upload size in bytes (0 = unlimited)")
 }
 
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func envInt64(key string, fallback int64) int64 {
+	if v, err := strconv.ParseInt(os.Getenv(key), 10, 64); err == nil {
 		return v
 	}
 	return fallback
@@ -126,19 +136,26 @@ func printQR(s string) {
 	fmt.Println(qr.ToString(false))
 }
 
-// uniquePath returns dst unchanged if it doesn't exist, otherwise appends _1,
-// _2, … until a free name is found.
-func uniquePath(dir, name string) string {
+func createUniqueFile(dir, name string) (*os.File, string, error) {
+	name = filepath.Base(name)
 	dst := filepath.Join(dir, name)
-	if _, err := os.Stat(dst); os.IsNotExist(err) {
-		return dst
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
+	if err == nil {
+		return f, dst, nil
+	}
+	if !os.IsExist(err) {
+		return nil, "", err
 	}
 	ext := filepath.Ext(name)
 	base := strings.TrimSuffix(name, ext)
 	for i := 1; ; i++ {
 		dst = filepath.Join(dir, fmt.Sprintf("%s_%d%s", base, i, ext))
-		if _, err := os.Stat(dst); os.IsNotExist(err) {
-			return dst
+		f, err = os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
+		if err == nil {
+			return f, dst, nil
+		}
+		if !os.IsExist(err) {
+			return nil, "", err
 		}
 	}
 }
@@ -161,6 +178,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {
+	if maxSize > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+	}
+
 	reader, err := r.MultipartReader()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -181,15 +202,13 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		if name == "" {
 			continue
 		}
-		name = filepath.Base(name)
-		dst := uniquePath(uploadDir, name)
-		name = filepath.Base(dst)
-
-		f, err := os.Create(dst)
+		f, dst, err := createUniqueFile(uploadDir, name)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		name = filepath.Base(dst)
+
 		_, err = io.Copy(f, part)
 		f.Close()
 		if err != nil {
